@@ -35,9 +35,9 @@ public interface MusicMaskConfig extends Config
     {
         RUNESCAPE_2("RS2"),
         RUNESCAPE_OLD_SCHOOL("OSRS"),
-        RUNESCAPE_HIGH_DEFINITION("RSHD"),
-        RUNESCAPE_3("RS3"),
-        CUSTOM("Custom");
+        RUNESCAPE_HIGH_DEFINITION("RSHD");
+        //RUNESCAPE_3("RS3"),
+        //CUSTOM("Custom");
 
         public String version;
 
