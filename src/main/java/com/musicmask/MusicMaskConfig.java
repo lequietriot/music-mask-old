@@ -80,7 +80,7 @@ public interface MusicMaskConfig extends Config
     @ConfigItem(
             position = 4,
             keyName = "musicShuffle",
-            name = "Shuffle Mode",
+            name = "Shuffle Mode (Unavailable)",
             description = "Set the Music to Shuffle"
     )
     default boolean getShuffleMode() {
