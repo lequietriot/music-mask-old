@@ -1,0 +1,20 @@
+Instrument Name = 58
+
+Sample = 152
+Root Key = -16384
+Lower Key Range = 0
+Upper Key Range = 128
+Patch Volume = 40
+Sample Loop Start = 12160
+Sample Loop End = 14300
+Sample Volume = 32
+Sample Pan = 64
+Parameter 1 = 0
+Parameter 2 = 0
+Parameter 3 = 0
+Parameter 4 = 0
+Parameter 5 = 0
+Parameter 6 = 24
+Parameter 7 = 0
+Array 1 = [0, 64, 3, 15, 7, 4, 13, 0]
+Array 2 = null

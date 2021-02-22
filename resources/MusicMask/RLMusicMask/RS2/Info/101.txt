@@ -1,0 +1,20 @@
+Instrument Name = 101
+
+Sample = GOBLN84A
+Root Key = -11261
+Lower Key Range = 0
+Upper Key Range = 128
+Patch Volume = 26
+Sample Loop Start = 32
+Sample Loop End = 6278
+Sample Volume = 32
+Sample Pan = 64
+Parameter 1 = 0
+Parameter 2 = 0
+Parameter 3 = 0
+Parameter 4 = 0
+Parameter 5 = 0
+Parameter 6 = 24
+Parameter 7 = 0
+Array 1 = [0, 64, 7, 26, 14, 11, 23, 0]
+Array 2 = [0, 64, 11, 2, 17, 59, 19, 12, 23, 64, 25, 12, 29, 64, 31, 12, 35, 64]
