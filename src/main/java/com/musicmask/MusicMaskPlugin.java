@@ -47,14 +47,12 @@ import net.runelite.client.plugins.PluginDescriptor;
 
 import javax.inject.Inject;
 import javax.sound.midi.InvalidMidiDataException;
-import javax.sound.midi.MidiSystem;
 import javax.sound.sampled.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Objects;
 
 @PluginDescriptor(
@@ -77,27 +75,13 @@ public class MusicMaskPlugin extends Plugin
 
     private String maskPath;
 
-    private Thread oldEngineThread;
-
-    private Thread newEngineThread;
-
-    private Thread oldFadeThread;
-
-    private Thread newFadeThread;
-
     private AudioSynthesizer audioSynthesizer;
 
     private boolean usingNewEngine;
 
-    private Thread soundPlayerThread;
-
     private File midiFile;
 
     private boolean initialized = false;
-
-    MidiPcmStream midiPcmStreamL;
-
-    MidiPcmStream midiPcmStreamR;
 
     SoundPlayer[] soundPlayers;
 
@@ -155,11 +139,9 @@ public class MusicMaskPlugin extends Plugin
                     while (initialized) {
                         if (sourceDataLine == null) {
                             initSDL();
+                        } else {
+                            play(soundPlayers);
                         }
-                        if (!sourceDataLine.isOpen()) {
-                            initSDL();
-                        }
-                        play(soundPlayers);
                     }
                 }
             } catch (IOException | InvalidMidiDataException | UnsupportedAudioFileException | LineUnavailableException exception) {
@@ -206,17 +188,15 @@ public class MusicMaskPlugin extends Plugin
         PcmPlayer.pcmPlayer_sampleRate = 44100;
         PcmPlayer.pcmPlayer_stereo = true;
 
-        midiPcmStreamL = new MidiPcmStream();
         Path path = Paths.get(midi.toURI());
-
-        //LEFT
-        MidiTrack midiTrackL = new MidiTrack();
         MidiTrack.midi = Files.readAllBytes(path);
 
+        //LEFT
+        MidiPcmStream midiPcmStreamL = new MidiPcmStream();
         midiPcmStreamL.init(9, 128);
-        midiPcmStreamL.setMusicTrack(midiTrackL, musicMaskConfig.getLoopingMode());
+        midiPcmStreamL.setMusicTrack(musicMaskConfig.getLoopingMode());
         midiPcmStreamL.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
-        midiPcmStreamL.loadStereoSoundbank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), true, musicMaskConfig.getMusicVersion().version.equals("RS3"));
+        midiPcmStreamL.loadStereoSoundBank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), true, musicMaskConfig.getMusicVersion().version.equals("RS3"));
 
         SoundPlayer soundPlayerL = new SoundPlayer();
         soundPlayerL.setStream(midiPcmStreamL);
@@ -224,16 +204,11 @@ public class MusicMaskPlugin extends Plugin
         soundPlayerL.init();
 
         //RIGHT
-        midiPcmStreamR = new MidiPcmStream();
-        Path pathR = Paths.get(midi.toURI());
-
-        MidiTrack midiTrackR = new MidiTrack();
-        MidiTrack.midi = Files.readAllBytes(pathR);
-
+        MidiPcmStream midiPcmStreamR = new MidiPcmStream();
         midiPcmStreamR.init(9, 128);
-        midiPcmStreamR.setMusicTrack(midiTrackR, musicMaskConfig.getLoopingMode());
+        midiPcmStreamR.setMusicTrack(musicMaskConfig.getLoopingMode());
         midiPcmStreamR.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
-        midiPcmStreamR.loadStereoSoundbank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), false, musicMaskConfig.getMusicVersion().version.equals("RS3"));
+        midiPcmStreamR.loadStereoSoundBank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), false, musicMaskConfig.getMusicVersion().version.equals("RS3"));
 
         SoundPlayer soundPlayerR = new SoundPlayer();
         soundPlayerR.setStream(midiPcmStreamR);
@@ -342,7 +317,7 @@ public class MusicMaskPlugin extends Plugin
 
         if (sourceDataLine != null) {
             sourceDataLine.stop();
-            sourceDataLine.close();
+            sourceDataLine = null;
         }
     }
 
@@ -390,17 +365,6 @@ public class MusicMaskPlugin extends Plugin
     private void fadeTo(String songName) throws InterruptedException {
 
         Thread fadeThread = new Thread(() -> {
-            for (SoundPlayer soundPlayer : soundPlayers) {
-                int volume = ((MidiPcmStream) soundPlayer.stream).getPcmStreamVolume();
-                for (int step = volume; step > -1; step--) {
-                    ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(step);
-                    try {
-                        Thread.sleep(5);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
 
             File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
             if (midiFiles != null) {
@@ -419,7 +383,18 @@ public class MusicMaskPlugin extends Plugin
                     }
                 }
             }
-            initialized = false;
+
+            for (SoundPlayer soundPlayer : soundPlayers) {
+                int volume = ((MidiPcmStream) soundPlayer.stream).getPcmStreamVolume();
+                for (int step = volume; step > -1; step--) {
+                    ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(step);
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
             shutDown();
             startUp();
         });

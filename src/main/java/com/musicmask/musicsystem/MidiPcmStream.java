@@ -128,9 +128,9 @@ public class MidiPcmStream extends PcmStream {
         this.patchStream.fill(var1, var2, var3);
     }
 
-    public synchronized void setMusicTrack(MidiTrack midiTrack, boolean loop) {
+    public synchronized void setMusicTrack(boolean loop) {
         this.clear();
-        this.midiFile.parse(midiTrack.midi);
+        this.midiFile.parse(MidiTrack.midi);
         this.musicLoop = loop;
         this.sequencePosition = 0L;
         int tracks = this.midiFile.trackCount();
@@ -839,14 +839,11 @@ public class MidiPcmStream extends PcmStream {
 
     }
 
-    public void loadStereoSoundbank(File soundBankPath, File musicPatchPath, boolean isLeftChannel, boolean isRS3) throws IOException, UnsupportedAudioFileException, InvalidMidiDataException {
-        if (MidiTrack.table != null) {
-            MidiTrack.clear();
-        }
+    public void loadStereoSoundBank(File soundBankPath, File musicPatchPath, boolean isLeftChannel, boolean isRS3) throws IOException, UnsupportedAudioFileException, InvalidMidiDataException {
 
         MidiTrack.loadMidiTrackInfo();
 
-        for (ByteArrayNode tableIndex = (ByteArrayNode) MidiTrack.table.first(); tableIndex != null; tableIndex = (ByteArrayNode) MidiTrack.table.next()) {
+        for (AudioNode tableIndex = MidiTrack.table.first(); tableIndex != null; tableIndex = MidiTrack.table.next()) {
             int patchID = (int) tableIndex.key;
             MusicPatch musicPatch = (MusicPatch)this.musicPatches.get(patchID);
             if (musicPatch == null) {

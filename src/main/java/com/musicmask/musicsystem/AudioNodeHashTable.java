@@ -1,5 +1,7 @@
 package com.musicmask.musicsystem;
 
+import java.util.Objects;
+
 public final class AudioNodeHashTable {
 
    int size;
@@ -24,11 +26,13 @@ public final class AudioNodeHashTable {
    public AudioNode get(long var1) {
       AudioNode var3 = this.buckets[(int)(var1 & (long)(this.size - 1))];
 
-      for(this.currentGet = var3.previous; var3 != this.currentGet; this.currentGet = this.currentGet.previous) {
-         if(this.currentGet.key == var1) {
-            AudioNode var4 = this.currentGet;
-            this.currentGet = this.currentGet.previous;
-            return var4;
+      for(this.currentGet = var3.previous; var3 != this.currentGet; this.currentGet = Objects.requireNonNull(this.currentGet).previous) {
+         if (this.currentGet != null) {
+            if (this.currentGet.key == var1) {
+               AudioNode var4 = this.currentGet;
+               this.currentGet = this.currentGet.previous;
+               return var4;
+            }
          }
       }
 

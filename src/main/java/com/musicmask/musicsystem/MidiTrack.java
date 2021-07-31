@@ -75,13 +75,17 @@ public class MidiTrack extends AudioNode {
                             var12 = var8 >> 16 & 127;
                             if (var12 > 0) {
                                 int var13 = var2[var10];
-                                ByteArrayNode var14 = (ByteArrayNode) table.get(var13);
-                                if (var14 == null) {
-                                    var14 = new ByteArrayNode(new byte[128]);
-                                    table.put(var14, var13);
-                                }
+                                if (table != null) {
+                                    ByteArrayNode var14 = (ByteArrayNode) table.get(var13);
+                                    if (var14 == null) {
+                                        var14 = new ByteArrayNode(new byte[128]);
+                                        if (table != null) {
+                                            table.put(var14, var13);
+                                        }
+                                    }
 
-                                var14.byteArray[var11] = 1;
+                                    var14.byteArray[var11] = 1;
+                                }
                             }
                         }
 
@@ -90,7 +94,12 @@ public class MidiTrack extends AudioNode {
                     }
                 }
             } while(!var4.isDone());
-
+        }
+        else {
+            clear();
+            if (midi != null) {
+                loadMidiTrackInfo();
+            }
         }
     }
 
