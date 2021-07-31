@@ -33,7 +33,6 @@ public interface MusicMaskConfig extends Config
 {
     enum MusicVersion
     {
-        RETRO_GAME_BOY("GB"),
         RUNESCAPE_2("RS2"),
         RUNESCAPE_OLD_SCHOOL("OSRS"),
         RUNESCAPE_HIGH_DEFINITION("RSHD"),
@@ -79,23 +78,4 @@ public interface MusicMaskConfig extends Config
         return false;
     }
 
-    @ConfigItem(
-            position = 4,
-            keyName = "musicShuffle",
-            name = "Shuffle Mode",
-            description = "Set the Music to Shuffle"
-    )
-    default boolean getShuffleMode() {
-        return false;
-    }
-
-    @ConfigItem(
-            position = 5,
-            keyName = "musicOverride",
-            name = "Override Login Music",
-            description = "Override the login song"
-    )
-    default String getOverridingMusic() {
-        return "";
-    }
 }

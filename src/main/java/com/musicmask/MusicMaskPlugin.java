@@ -95,8 +95,6 @@ public class MusicMaskPlugin extends Plugin
 
     private boolean initialized = false;
 
-    private boolean fullyLoaded = false;
-
     MidiPcmStream midiPcmStreamL;
 
     MidiPcmStream midiPcmStreamR;
@@ -341,7 +339,6 @@ public class MusicMaskPlugin extends Plugin
     protected void shutDown()
     {
         initialized = false;
-        fullyLoaded = false;
 
         if (sourceDataLine != null) {
             sourceDataLine.stop();
