@@ -25,12 +25,17 @@
 package com.musicmask;
 
 import com.google.inject.Provides;
-import com.musicmask.soundengine.MidiPcmStream;
-import com.musicmask.soundengine.MidiTrack;
-import com.musicmask.soundengine.PcmPlayer;
-import com.musicmask.soundengine.SoundPlayer;
+import com.musicmask.musicsystem.MidiPcmStream;
+import com.musicmask.musicsystem.MidiTrack;
+import com.musicmask.musicsystem.PcmPlayer;
+import com.musicmask.musicsystem.SoundPlayer;
+import com.sun.media.sound.AudioSynthesizer;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
 import net.runelite.client.callback.ClientThread;
@@ -42,11 +47,15 @@ import net.runelite.client.plugins.PluginDescriptor;
 
 import javax.inject.Inject;
 import javax.sound.midi.InvalidMidiDataException;
+import javax.sound.midi.MidiSystem;
+import javax.sound.sampled.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Objects;
 
 @PluginDescriptor(
         name = "Music Mask",
@@ -68,290 +77,291 @@ public class MusicMaskPlugin extends Plugin
 
     private String maskPath;
 
-    private Thread songThread;
+    private Thread oldEngineThread;
 
-    private Thread fadeThread;
+    private Thread newEngineThread;
 
-    private SoundPlayer soundPlayer;
+    private Thread oldFadeThread;
+
+    private Thread newFadeThread;
+
+    private AudioSynthesizer audioSynthesizer;
+
+    private boolean usingNewEngine;
+
+    private Thread soundPlayerThread;
+
+    private File midiFile;
+
+    private boolean initialized = false;
+
+    private boolean fullyLoaded = false;
+
+    MidiPcmStream midiPcmStreamL;
+
+    MidiPcmStream midiPcmStreamR;
+
+    SoundPlayer[] soundPlayers;
+
+    SourceDataLine sourceDataLine;
 
     @Override
-    protected void startUp() throws Exception
-    {
-        currentSong = "Scape Main";
-        initSongThread();
-        songThread.start();
+    protected void startUp() {
+
+        File resource = new File("resources/MusicMask/RLMusicMask/");
+        maskPath = resource.getAbsolutePath();
+
+        Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
+
+        if (musicPlayingWidget != null) {
+
+            if (!musicPlayingWidget.getText().equals(currentSong)) {
+                currentSong = musicPlayingWidget.getText();
+            }
+        }
+
+        else {
+            currentSong = "Scape Main";
+        }
+
+        startSoundPlayer();
     }
 
-    private void initSongThread()
-    {
-        songThread = new Thread(() ->
-        {
-            try
-            {
-                if (!musicMaskConfig.getShuffleMode())
-                {
-                    File resource = new File("resources/MusicMask/RLMusicMask/");
-                    maskPath = resource.getAbsolutePath();
-                    File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
-                    if (midiFiles != null)
-                    {
-                        for (File midi : midiFiles)
-                        {
-                            if (midi.getName().contains(" - "))
-                            {
-                                int index = midi.getName().lastIndexOf(" - ");
-                                String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
+    private void startSoundPlayer() {
 
-                                if (name.equalsIgnoreCase(currentSong))
-                                {
-                                    initMidiStream(midi, musicMaskConfig.getShuffleMode(), musicMaskConfig.getLoopingMode());
-                                    System.out.println(name + " is playing!");
-                                }
-                            }
+        Thread songThread = new Thread(() -> {
 
-                            if (midi.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong))
-                            {
-                                initMidiStream(midi, musicMaskConfig.getShuffleMode(), musicMaskConfig.getLoopingMode());
-                                System.out.println(midi.getName() + " is playing!");
+            try {
+                File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
+                if (midiFiles != null) {
+                    for (File midi : midiFiles) {
+                        if (midi.getName().contains(" - ")) {
+                            int index = midi.getName().lastIndexOf(" - ");
+                            String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
+
+                            if (name.equalsIgnoreCase(currentSong)) {
+                                midiFile = midi;
                             }
+                        }
+
+                        if (midi.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong)) {
+                            midiFile = midi;
                         }
                     }
                 }
-                else
-                {
-                    File resource = new File("resources/MusicMask/RLMusicMask/");
-                    maskPath = resource.getAbsolutePath();
-                    File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
-                    if (midiFiles != null)
-                    {
-                        for (File midi : midiFiles)
-                        {
-                            if (midi.getName().contains(" - "))
-                            {
-                                int index = midi.getName().lastIndexOf(" - ");
-                                String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
 
-                                if (name.equalsIgnoreCase(currentSong))
-                                {
-                                    initMidiStream(midi, musicMaskConfig.getShuffleMode(), false);
-                                    System.out.println(name + " is playing!");
-                                }
-                            }
+                if (!initialized) {
 
-                            if (midi.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong))
-                            {
-                                initMidiStream(midi, musicMaskConfig.getShuffleMode(), false);
-                                System.out.println(midi.getName() + " is playing!");
-                            }
+                    soundPlayers = initStereoMidiStream(midiFile);
+
+                    while (initialized) {
+                        if (sourceDataLine == null) {
+                            initSDL();
                         }
+                        if (!sourceDataLine.isOpen()) {
+                            initSDL();
+                        }
+                        play(soundPlayers);
                     }
                 }
-            } catch (IOException | InvalidMidiDataException exception)
-            {
+            } catch (IOException | InvalidMidiDataException | UnsupportedAudioFileException | LineUnavailableException exception) {
                 exception.printStackTrace();
             }
         });
+        songThread.start();
     }
 
-    private void playSound(SoundPlayer soundPlayer)
-    {
-        soundPlayer.fill(soundPlayer.samples, 256);
-        soundPlayer.write();
+    private void initSDL() {
+        try {
+            DataLine.Info info = new DataLine.Info(SourceDataLine.class, new AudioFormat(44100, 16, 2, true, false));
+            sourceDataLine = (SourceDataLine) AudioSystem.getLine(info);
+            sourceDataLine.open();
+            sourceDataLine.start();
+        } catch (LineUnavailableException e) {
+            e.printStackTrace();
+        }
     }
 
-    private void initFadeThread()
-    {
-        fadeThread = new Thread(() ->
-        {
-            if (soundPlayer != null)
-            {
-                for (int volume = ((MidiPcmStream) soundPlayer.stream).getPcmStreamVolume(); volume > 0; volume--)
-                {
-                    ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(volume);
-                    try
-                    {
-                        Thread.sleep(20);
-                    } catch (InterruptedException e)
-                    {
-                        e.printStackTrace();
-                    }
-                }
-                soundPlayer.close();
-            }
-            initSongThread();
-            songThread.start();
-        });
+    private void play(SoundPlayer[] soundPlayers) throws LineUnavailableException {
+
+        for (SoundPlayer soundPlayer : soundPlayers) {
+            soundPlayer.fill(soundPlayer.samples, 256);
+            soundPlayer.writeToBuffer();
+        }
+
+        byte[] audioL = soundPlayers[0].byteSamples;
+        byte[] audioR = soundPlayers[1].byteSamples;
+        byte[] audioBytes = new byte[audioL.length];
+
+        for (int index = 0; index < audioBytes.length; index += 4) {
+            audioBytes[index] = audioL[index];
+            audioBytes[index + 1] = audioL[index + 1];
+            audioBytes[index + 2] = audioR[index + 2];
+            audioBytes[index + 3] = audioR[index + 3];
+        }
+
+        sourceDataLine.write(audioBytes, 0, audioBytes.length);
     }
 
-    private void initMidiStream(File midi, boolean shuffle, boolean looping) throws IOException, InvalidMidiDataException
-    {
-        MidiPcmStream midiPcmStream = new MidiPcmStream();
-        Path path = Paths.get(midi.toURI());
+    private SoundPlayer[] initStereoMidiStream(File midi) throws IOException, InvalidMidiDataException, UnsupportedAudioFileException {
+
         PcmPlayer.pcmPlayer_sampleRate = 44100;
         PcmPlayer.pcmPlayer_stereo = true;
 
-        MidiTrack midiTrack = new MidiTrack();
-        midiTrack.midi = Files.readAllBytes(path);
-        midiTrack.loadMidiTrackInfo();
+        midiPcmStreamL = new MidiPcmStream();
+        Path path = Paths.get(midi.toURI());
 
-        midiPcmStream.init(9, 128);
-        midiPcmStream.setMusicTrack(midiTrack, looping);
-        midiPcmStream.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
-        midiPcmStream.loadTestSoundBankCompletely(midiTrack, maskPath, musicMaskConfig.getMusicVersion().version);
+        //LEFT
+        MidiTrack midiTrackL = new MidiTrack();
+        MidiTrack.midi = Files.readAllBytes(path);
 
-        soundPlayer = new SoundPlayer();
-        soundPlayer.setStream(midiPcmStream);
-        soundPlayer.samples = new int[8196];
-        soundPlayer.capacity = 16384;
-        soundPlayer.init();
-        soundPlayer.open(soundPlayer.capacity);
+        midiPcmStreamL.init(9, 128);
+        midiPcmStreamL.setMusicTrack(midiTrackL, false);
+        midiPcmStreamL.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
+        midiPcmStreamL.loadStereoSoundbank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), true, musicMaskConfig.getMusicVersion().version.equals("RS3"));
 
-        while (midiPcmStream.active)
-        {
-            if (!shuffle)
-            {
-                playSound(soundPlayer);
+        SoundPlayer soundPlayerL = new SoundPlayer();
+        soundPlayerL.setStream(midiPcmStreamL);
+        soundPlayerL.samples = new int[512];
+        soundPlayerL.init();
+
+        //RIGHT
+        midiPcmStreamR = new MidiPcmStream();
+        Path pathR = Paths.get(midi.toURI());
+
+        MidiTrack midiTrackR = new MidiTrack();
+        MidiTrack.midi = Files.readAllBytes(pathR);
+
+        midiPcmStreamR.init(9, 128);
+        midiPcmStreamR.setMusicTrack(midiTrackR, false);
+        midiPcmStreamR.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
+        midiPcmStreamR.loadStereoSoundbank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), false, musicMaskConfig.getMusicVersion().version.equals("RS3"));
+
+        SoundPlayer soundPlayerR = new SoundPlayer();
+        soundPlayerR.setStream(midiPcmStreamR);
+        soundPlayerR.samples = new int[512];
+        soundPlayerR.init();
+
+        initialized = true;
+
+        return new SoundPlayer[]{soundPlayerL, soundPlayerR};
+    }
+
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded widgetLoaded) {
+        if (widgetLoaded.getGroupId() == WidgetID.MUSIC_GROUP_ID) {
+            Widget trackListWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 3);
+            if (trackListWidget != null) {
+                trackListWidget.deleteAllChildren();
+                File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
+                addCustomMusic(midiFiles, trackListWidget);
             }
+        }
+    }
 
-            else
-            {
-                playSound(soundPlayer);
+    private void addCustomMusic(File[] midiFiles, Widget trackListWidget) {
+        int songIndex = Objects.requireNonNull(trackListWidget.getChildren()).length;
+        int originalY = 0;
+        if (midiFiles != null) {
+            for (File midi : midiFiles) {
+                if (midi.getName().contains(" - ")) {
+                    int index = midi.getName().lastIndexOf(" - ");
+                    String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
 
-                if (midiPcmStream.midiFile.isDone())
-                {
-                    soundPlayer.close();
-                    if (maskPath != null)
-                    {
-                        File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
+                    Widget trackSlot = trackListWidget.createChild(songIndex++, 4);
+                    trackSlot.setHidden(false);
+                    trackSlot.setName(name);
+                    trackSlot.setText(name);
+                    trackSlot.setFontId(495);
+                    trackSlot.setTextColor(Objects.requireNonNull(client.getWidget(239, 6)).getTextColor());
+                    trackSlot.setTextShadowed(true);
+                    trackSlot.setOriginalWidth(154);
+                    trackSlot.setOriginalHeight(15);
+                    trackSlot.setOpacity(0);
+                    trackSlot.setHasListener(true);
+                    trackSlot.setOriginalX(0);
+                    trackSlot.setOriginalY(originalY);
+                    trackSlot.setAction(1, "Play");
+                    trackSlot.setOnOpListener((JavaScriptCallback) e -> playCustomSong(name));
+                    trackSlot.revalidate();
 
-                        if (midiFiles != null)
-                        {
-                            File midiFile = midiFiles[(int) (midiFiles.length * Math.random())];
-                            if (midiFile.getName().contains(".mid"))
-                            {
-                                if (midiFile.getName().contains(" - "))
-                                {
-                                    int index = midiFile.getName().lastIndexOf(" - ");
-                                    String name = midiFile.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
+                    originalY = originalY + 15;
+                }
+                else {
+                    String name = midi.getName().replace(".mid", "").trim();
 
-                                    if (name.equalsIgnoreCase(currentSong))
-                                    {
-                                        initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                                        System.out.println(name + " is playing!");
-                                    }
-                                }
+                    Widget trackSlot = trackListWidget.createChild(songIndex++, 4);
+                    trackSlot.setHidden(false);
+                    trackSlot.setName(name);
+                    trackSlot.setText(name);
+                    trackSlot.setFontId(495);
+                    trackSlot.setTextColor(Objects.requireNonNull(client.getWidget(239, 6)).getTextColor());
+                    trackSlot.setTextShadowed(true);
+                    trackSlot.setOriginalWidth(154);
+                    trackSlot.setOriginalHeight(15);
+                    trackSlot.setOpacity(0);
+                    trackSlot.setHasListener(true);
+                    trackSlot.setOriginalX(0);
+                    trackSlot.setOriginalY(originalY);
+                    trackSlot.setAction(1, "Play");
+                    trackSlot.setOnOpListener((JavaScriptCallback) e -> playCustomSong(name));
+                    trackSlot.revalidate();
 
-                                if (midiFile.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong))
-                                {
-                                    initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                                    System.out.println(midiFile.getName() + " is playing!");
-                                }
-                            }
-
-                            else
-                            {
-                                midiFile = midiFiles[(int) (midiFiles.length * Math.random())];
-                                if (midiFile.getName().contains(".mid"))
-                                {
-                                    if (midiFile.getName().contains(" - "))
-                                    {
-                                        int index = midiFile.getName().lastIndexOf(" - ");
-                                        String name = midiFile.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
-
-                                        if (name.equalsIgnoreCase(currentSong))
-                                        {
-                                            initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                                            System.out.println(name + " is playing!");
-                                        }
-                                    }
-
-                                    if (midiFile.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong))
-                                    {
-                                        initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                                        System.out.println(midiFile.getName() + " is playing!");
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    originalY = originalY + 15;
                 }
             }
+        }
+        trackListWidget.setScrollHeight(originalY + 3);
+        trackListWidget.revalidateScroll();
+    }
+
+    private void playCustomSong(String name) {
+
+        Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
+
+        if (musicPlayingWidget != null) {
+            musicPlayingWidget.setName(name);
+            musicPlayingWidget.setText(name);
+            try {
+                fadeTo(name);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Subscribe
+    protected void onGameStateChanged(GameStateChanged gameStateChanged) {
+        if (client.getGameState().equals(GameState.LOGGED_IN)) {
+            currentSong = null;
         }
     }
 
     @Override
     protected void shutDown()
     {
-        if (soundPlayer != null && songThread != null)
-        {
-            soundPlayer.close();
+        initialized = false;
+        fullyLoaded = false;
+
+        if (sourceDataLine != null) {
+            sourceDataLine.stop();
+            sourceDataLine.close();
         }
     }
 
     @Subscribe
-    public void onConfigChanged(ConfigChanged configChanged) throws IOException, InvalidMidiDataException
-    {
-        if (configChanged.getKey().equals("musicVolume"))
-        {
-            if (soundPlayer != null)
-            {
-                ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(musicMaskConfig.getMusicVolume());
+    public void onConfigChanged(ConfigChanged configChanged) {
+        if (configChanged.getKey().equals("musicVersion")) {
+            try {
+                fadeTo(currentSong);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
 
-        if (configChanged.getKey().equals("musicVersion"))
-        {
-            if (songThread != null)
-            {
-                initFadeThread();
-                fadeThread.start();
-            }
-        }
-
-        if (configChanged.getKey().equals("musicOverride"))
-        {
-            currentSong = musicMaskConfig.getOverridingMusic();
-            if (songThread != null)
-            {
-                initFadeThread();
-                fadeThread.start();
-            }
-        }
-
-        if (configChanged.getKey().equals("musicShuffle"))
-        {
-            if (musicMaskConfig.getShuffleMode())
-            {
-                if (maskPath != null)
-                {
-                    File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
-
-                    if (midiFiles != null)
-                    {
-                        File midiFile = midiFiles[(int) (midiFiles.length * Math.random())];
-                        if (midiFile.getName().contains(" - "))
-                        {
-                            int index = midiFile.getName().lastIndexOf(" - ");
-                            currentSong = midiFile.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
-
-                            if (songThread != null)
-                            {
-                                initFadeThread();
-                                fadeThread.start();
-                            }
-                        }
-
-                        if (!midiFile.getName().contains(" - "))
-                        {
-                            currentSong = midiFile.getName().replace(".mid", "").trim();
-                            if (songThread != null)
-                            {
-                                initFadeThread();
-                                fadeThread.start();
-                            }
-                        }
-                    }
-                }
+        if (configChanged.getKey().equals("musicVolume")) {
+            for (SoundPlayer soundPlayer : soundPlayers) {
+                ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(Integer.parseInt(configChanged.getNewValue()));
             }
         }
     }
@@ -363,101 +373,60 @@ public class MusicMaskPlugin extends Plugin
     }
 
     @Subscribe
-    public void onGameTick(GameTick gameTick) throws IOException, InvalidMidiDataException
-    {
-        if (!musicMaskConfig.getShuffleMode())
-        {
-            if (!musicMaskConfig.getOverridingMusic().equals(""))
-            {
-                if (gameTick != null)
-                {
-                    Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
-                    if (musicPlayingWidget != null)
-                    {
-                        if (!musicPlayingWidget.getText().equals(currentSong))
-                        {
-                            currentSong = musicPlayingWidget.getText();
-                            if (songThread != null)
-                            {
-                                initFadeThread();
-                                fadeThread.start();
-                            }
-                        }
-                    }
-                }
-            } else
-            {
-                Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
-                if (musicPlayingWidget != null)
-                {
-                    if (!musicPlayingWidget.getText().equals(currentSong))
-                    {
-                        currentSong = musicPlayingWidget.getText();
-                        if (songThread != null)
-                        {
-                            initFadeThread();
-                            fadeThread.start();
-                        }
-                    }
+    public void onGameTick(GameTick gameTick) {
+
+        Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
+
+        if (musicPlayingWidget != null) {
+
+            if (!musicPlayingWidget.getText().equals(currentSong)) {
+                currentSong = musicPlayingWidget.getText();
+                try {
+                    fadeTo(currentSong);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
         }
-        else
-        {
-            if (maskPath != null)
-            {
-                File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
+    }
 
-                if (midiFiles != null)
-                {
-                    File midiFile = midiFiles[(int) (midiFiles.length * Math.random())];
-                    if (midiFile.getName().contains(".mid"))
-                    {
-                        if (midiFile.getName().contains(" - "))
-                        {
-                            int index = midiFile.getName().lastIndexOf(" - ");
-                            String name = midiFile.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
+    private void fadeTo(String songName) throws InterruptedException {
 
-                            if (name.equalsIgnoreCase(currentSong))
-                            {
-                                initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                                System.out.println(name + " is playing!");
-                            }
-                        }
-
-                        if (midiFile.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong))
-                        {
-                            initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                            System.out.println(midiFile.getName() + " is playing!");
-                        }
-                    }
-
-                    else
-                    {
-                        midiFile = midiFiles[(int) (midiFiles.length * Math.random())];
-                        if (midiFile.getName().contains(".mid"))
-                        {
-                            if (midiFile.getName().contains(" - "))
-                            {
-                                int index = midiFile.getName().lastIndexOf(" - ");
-                                String name = midiFile.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
-
-                                if (name.equalsIgnoreCase(currentSong))
-                                {
-                                    initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                                    System.out.println(name + " is playing!");
-                                }
-                            }
-
-                            if (midiFile.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong))
-                            {
-                                initMidiStream(midiFile, musicMaskConfig.getShuffleMode(), false);
-                                System.out.println(midiFile.getName() + " is playing!");
-                            }
-                        }
+        Thread fadeThread = new Thread(() -> {
+            for (SoundPlayer soundPlayer : soundPlayers) {
+                int volume = ((MidiPcmStream) soundPlayer.stream).getPcmStreamVolume();
+                for (int step = volume; step > -1; step--) {
+                    ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(step);
+                    try {
+                        Thread.sleep(5);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
                 }
             }
-        }
+
+            File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
+            if (midiFiles != null) {
+                for (File midi : midiFiles) {
+                    if (midi.getName().contains(" - ")) {
+                        int index = midi.getName().lastIndexOf(" - ");
+                        String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
+
+                        if (name.equalsIgnoreCase(songName)) {
+                            midiFile = midi;
+                        }
+                    }
+
+                    if (midi.getName().replace(".mid", "").trim().equalsIgnoreCase(songName)) {
+                        midiFile = midi;
+                    }
+                }
+            }
+            initialized = false;
+            shutDown();
+            startUp();
+        });
+
+        fadeThread.start();
     }
 }
