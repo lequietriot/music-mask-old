@@ -214,7 +214,7 @@ public class MusicMaskPlugin extends Plugin
         MidiTrack.midi = Files.readAllBytes(path);
 
         midiPcmStreamL.init(9, 128);
-        midiPcmStreamL.setMusicTrack(midiTrackL, false);
+        midiPcmStreamL.setMusicTrack(midiTrackL, musicMaskConfig.getLoopingMode());
         midiPcmStreamL.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
         midiPcmStreamL.loadStereoSoundbank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), true, musicMaskConfig.getMusicVersion().version.equals("RS3"));
 
@@ -231,7 +231,7 @@ public class MusicMaskPlugin extends Plugin
         MidiTrack.midi = Files.readAllBytes(pathR);
 
         midiPcmStreamR.init(9, 128);
-        midiPcmStreamR.setMusicTrack(midiTrackR, false);
+        midiPcmStreamR.setMusicTrack(midiTrackR, musicMaskConfig.getLoopingMode());
         midiPcmStreamR.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
         midiPcmStreamR.loadStereoSoundbank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), false, musicMaskConfig.getMusicVersion().version.equals("RS3"));
 
