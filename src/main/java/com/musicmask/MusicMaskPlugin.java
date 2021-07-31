@@ -222,6 +222,7 @@ public class MusicMaskPlugin extends Plugin
 
     @Subscribe
     public void onWidgetLoaded(WidgetLoaded widgetLoaded) {
+        /**
         if (widgetLoaded.getGroupId() == WidgetID.MUSIC_GROUP_ID) {
             Widget trackListWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 3);
             if (trackListWidget != null) {
@@ -229,7 +230,7 @@ public class MusicMaskPlugin extends Plugin
                 File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
                 addCustomMusic(midiFiles, trackListWidget);
             }
-        }
+        }**/
     }
 
     private void addCustomMusic(File[] midiFiles, Widget trackListWidget) {

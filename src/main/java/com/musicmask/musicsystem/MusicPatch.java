@@ -746,6 +746,7 @@ public class MusicPatch extends AudioNode {
                             this.pitchOffset[note] = (short) (this.pitchOffset[note] - 32768);
                         }
                     }
+                    ((AudioInputStream) sf2Sample.getData()).close();
                 }
             }
         }
