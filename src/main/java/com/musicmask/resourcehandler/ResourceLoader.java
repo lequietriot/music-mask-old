@@ -16,32 +16,42 @@ public class ResourceLoader {
 
     public static final String fileLink = "https://github.com/lequietriot/music-mask-hosting/raw/master/resources";
 
-    public static byte[] getURLResource(String path) throws IOException {
+    public static byte[] getURLResource(String path) {
+        try {
+            File downloadedFile = new File(System.getProperty("user.home") + "/MusicMaskData/" + path.replace("%20", " ").trim());
 
-        File downloadedFile = new File(System.getProperty("user.home") + "/MusicMaskData/" + path.replace("%20", " ").trim());
+            if (downloadedFile.mkdirs()) {
 
-        if (new File(System.getProperty("user.home") + "/MusicMaskData/" + path.replace("%20", " ").trim()).mkdirs()) {
+                URL url = new URL(fileLink + path);
+                URLConnection http = url.openConnection();
 
-            URL url  = new URL(fileLink + path);
-            URLConnection http = url.openConnection();
-            Map<String, List<String>> header = http.getHeaderFields();
+                Map<String, List<String>> header = http.getHeaderFields();
 
-            while (isRedirected(header)) {
-                url = new URL(fileLink + path);
-                http = url.openConnection();
-                header = http.getHeaderFields();
+                if (header.get(null).contains("404") || header.get(null).contains("410")) {
+                    return null;
+                }
+
+                while (isRedirected(header)) {
+                    url = new URL(fileLink + path);
+                    http = url.openConnection();
+                    header = http.getHeaderFields();
+                }
+
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                InputStream input = http.getInputStream();
+                Files.copy(input, Paths.get(downloadedFile.toURI()), StandardCopyOption.REPLACE_EXISTING);
+                byteArrayOutputStream.write(Files.readAllBytes(Paths.get(downloadedFile.toURI())));
+                byteArrayOutputStream.close();
+                return byteArrayOutputStream.toByteArray();
+            } else {
+                if (!downloadedFile.isDirectory()) {
+                    return Files.readAllBytes(Paths.get(downloadedFile.toURI()));
+                }
             }
-
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            InputStream input = http.getInputStream();
-            Files.copy(input, Paths.get(downloadedFile.toURI()), StandardCopyOption.REPLACE_EXISTING);
-            byteArrayOutputStream.write(Files.readAllBytes(Paths.get(downloadedFile.toURI())));
-            byteArrayOutputStream.close();
-            return byteArrayOutputStream.toByteArray();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        else {
-            return Files.readAllBytes(Paths.get(downloadedFile.toURI()));
-        }
+        return null;
     }
 
     private static boolean isRedirected(Map<String, List<String>> header) {

@@ -821,7 +821,7 @@ public class MidiPcmStream extends PcmStream {
         }
     }
 
-    static final void PcmStream_disable(PcmStream var0) {
+    static void PcmStream_disable(PcmStream var0) {
         var0.active = false;
         if (var0.sound != null) {
             var0.sound.position = 0;
@@ -845,26 +845,30 @@ public class MidiPcmStream extends PcmStream {
                 this.musicPatches.put(musicPatch, patchID);
             }
 
-            if (musicPatch != null) {
-                loadSoundFontsFromURL(version, musicPatch, patchID, isLeftChannel, isRS3);
-            }
+            loadSoundFontsFromURL(version, musicPatch, patchID, isLeftChannel, isRS3);
         }
     }
 
-    private byte[] loadMusicPatchFromURL(int patchID) throws IOException {
+    private byte[] loadMusicPatchFromURL(int patchID) {
         return ResourceLoader.getURLResource("/Patches/" + patchID + ".dat/");
     }
 
     private void loadSoundFontsFromURL(String version, MusicPatch musicPatch, int patchID, boolean isLeftChannel, boolean isRS3) throws IOException, InvalidMidiDataException {
         if (isRS3) {
-            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(ResourceLoader.getURLResource("/SF2/RS3/" + patchID + ".sf2/"));
-            SF2Soundbank sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(byteArrayInputStream);
-            musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
+            byte[] data = ResourceLoader.getURLResource("/SF2/RS3/" + patchID + ".sf2/");
+            if (data != null) {
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(data);
+                SF2Soundbank sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(byteArrayInputStream);
+                musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
+            }
         }
         else {
-            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(ResourceLoader.getURLResource("/SF2/" + version + ".sf2/"));
-            SF2Soundbank sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(byteArrayInputStream);
-            musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
+            byte[] data = ResourceLoader.getURLResource("/SF2/" + version + ".sf2/");
+            if (data != null) {
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(data);
+                SF2Soundbank sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(byteArrayInputStream);
+                musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
+            }
         }
     }
 }
