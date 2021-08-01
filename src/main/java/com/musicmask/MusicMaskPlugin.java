@@ -25,6 +25,7 @@
 package com.musicmask;
 
 import com.google.inject.Provides;
+import com.musicmask.resourcehandler.ResourceLoader;
 import com.musicmask.musicsystem.MidiPcmStream;
 import com.musicmask.musicsystem.MidiTrack;
 import com.musicmask.musicsystem.PcmPlayer;
@@ -34,8 +35,6 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
 import net.runelite.client.callback.ClientThread;
@@ -48,12 +47,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import javax.inject.Inject;
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.sampled.*;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Objects;
+import java.io.*;
 
 @PluginDescriptor(
         name = "Music Mask",
@@ -73,13 +67,11 @@ public class MusicMaskPlugin extends Plugin
 
     private String currentSong;
 
-    private String maskPath;
-
     private AudioSynthesizer audioSynthesizer;
 
     private boolean usingNewEngine;
 
-    private File midiFile;
+    private byte[] midiFile;
 
     private boolean initialized = false;
 
@@ -87,12 +79,12 @@ public class MusicMaskPlugin extends Plugin
 
     SourceDataLine sourceDataLine;
 
+    private String fileLink;
+
     @Override
     protected void startUp() {
 
-        File resource = new File("resources/MusicMask/RLMusicMask/");
-        maskPath = resource.getAbsolutePath();
-
+        fileLink = "https://github.com/lequietriot/music-mask-hosting/raw/master/resources";
         Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
 
         if (musicPlayingWidget != null) {
@@ -100,13 +92,14 @@ public class MusicMaskPlugin extends Plugin
             if (!musicPlayingWidget.getText().equals(currentSong)) {
                 currentSong = musicPlayingWidget.getText();
             }
-        }
-
-        else {
+        } else {
             currentSong = "Scape Main";
         }
-
         startSoundPlayer();
+    }
+
+    private byte[] loadMidiFileFromURL(String currentSong) throws IOException {
+        return ResourceLoader.getURLResource("/MIDI/" + currentSong + ".mid/");
     }
 
     private void startSoundPlayer() {
@@ -114,23 +107,7 @@ public class MusicMaskPlugin extends Plugin
         Thread songThread = new Thread(() -> {
 
             try {
-                File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
-                if (midiFiles != null) {
-                    for (File midi : midiFiles) {
-                        if (midi.getName().contains(" - ")) {
-                            int index = midi.getName().lastIndexOf(" - ");
-                            String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
-
-                            if (name.equalsIgnoreCase(currentSong)) {
-                                midiFile = midi;
-                            }
-                        }
-
-                        if (midi.getName().replace(".mid", "").trim().equalsIgnoreCase(currentSong)) {
-                            midiFile = midi;
-                        }
-                    }
-                }
+                midiFile = loadMidiFileFromURL(currentSong.replace(" ", "%20").trim());
 
                 if (!initialized) {
 
@@ -183,20 +160,19 @@ public class MusicMaskPlugin extends Plugin
         sourceDataLine.write(audioBytes, 0, audioBytes.length);
     }
 
-    private SoundPlayer[] initStereoMidiStream(File midi) throws IOException, InvalidMidiDataException, UnsupportedAudioFileException {
+    private SoundPlayer[] initStereoMidiStream(byte[] midiFile) throws IOException, InvalidMidiDataException, UnsupportedAudioFileException {
 
         PcmPlayer.pcmPlayer_sampleRate = 44100;
         PcmPlayer.pcmPlayer_stereo = true;
 
-        Path path = Paths.get(midi.toURI());
-        MidiTrack.midi = Files.readAllBytes(path);
+        MidiTrack.midi = midiFile;
 
         //LEFT
         MidiPcmStream midiPcmStreamL = new MidiPcmStream();
         midiPcmStreamL.init(9, 128);
         midiPcmStreamL.setMusicTrack(musicMaskConfig.getLoopingMode());
         midiPcmStreamL.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
-        midiPcmStreamL.loadStereoSoundBank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), true, musicMaskConfig.getMusicVersion().version.equals("RS3"));
+        midiPcmStreamL.loadStereoSoundBank(musicMaskConfig.getMusicVersion().version, true, musicMaskConfig.getMusicVersion().version.equals("RS3"));
 
         SoundPlayer soundPlayerL = new SoundPlayer();
         soundPlayerL.setStream(midiPcmStreamL);
@@ -208,7 +184,7 @@ public class MusicMaskPlugin extends Plugin
         midiPcmStreamR.init(9, 128);
         midiPcmStreamR.setMusicTrack(musicMaskConfig.getLoopingMode());
         midiPcmStreamR.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
-        midiPcmStreamR.loadStereoSoundBank(new File(maskPath + "/SF2/" + musicMaskConfig.getMusicVersion().version), new File((maskPath + "/Patches/")), false, musicMaskConfig.getMusicVersion().version.equals("RS3"));
+        midiPcmStreamR.loadStereoSoundBank(musicMaskConfig.getMusicVersion().version, false, musicMaskConfig.getMusicVersion().version.equals("RS3"));
 
         SoundPlayer soundPlayerR = new SoundPlayer();
         soundPlayerR.setStream(midiPcmStreamR);
@@ -218,90 +194,6 @@ public class MusicMaskPlugin extends Plugin
         initialized = true;
 
         return new SoundPlayer[]{soundPlayerL, soundPlayerR};
-    }
-
-    @Subscribe
-    public void onWidgetLoaded(WidgetLoaded widgetLoaded) {
-        /**
-        if (widgetLoaded.getGroupId() == WidgetID.MUSIC_GROUP_ID) {
-            Widget trackListWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 3);
-            if (trackListWidget != null) {
-                trackListWidget.deleteAllChildren();
-                File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
-                addCustomMusic(midiFiles, trackListWidget);
-            }
-        }**/
-    }
-
-    private void addCustomMusic(File[] midiFiles, Widget trackListWidget) {
-        int songIndex = Objects.requireNonNull(trackListWidget.getChildren()).length;
-        int originalY = 0;
-        if (midiFiles != null) {
-            for (File midi : midiFiles) {
-                if (midi.getName().contains(" - ")) {
-                    int index = midi.getName().lastIndexOf(" - ");
-                    String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
-
-                    Widget trackSlot = trackListWidget.createChild(songIndex++, 4);
-                    trackSlot.setHidden(false);
-                    trackSlot.setName(name);
-                    trackSlot.setText(name);
-                    trackSlot.setFontId(495);
-                    trackSlot.setTextColor(Objects.requireNonNull(client.getWidget(239, 6)).getTextColor());
-                    trackSlot.setTextShadowed(true);
-                    trackSlot.setOriginalWidth(154);
-                    trackSlot.setOriginalHeight(15);
-                    trackSlot.setOpacity(0);
-                    trackSlot.setHasListener(true);
-                    trackSlot.setOriginalX(0);
-                    trackSlot.setOriginalY(originalY);
-                    trackSlot.setAction(1, "Play");
-                    trackSlot.setOnOpListener((JavaScriptCallback) e -> playCustomSong(name));
-                    trackSlot.revalidate();
-
-                    originalY = originalY + 15;
-                }
-                else {
-                    String name = midi.getName().replace(".mid", "").trim();
-
-                    Widget trackSlot = trackListWidget.createChild(songIndex++, 4);
-                    trackSlot.setHidden(false);
-                    trackSlot.setName(name);
-                    trackSlot.setText(name);
-                    trackSlot.setFontId(495);
-                    trackSlot.setTextColor(Objects.requireNonNull(client.getWidget(239, 6)).getTextColor());
-                    trackSlot.setTextShadowed(true);
-                    trackSlot.setOriginalWidth(154);
-                    trackSlot.setOriginalHeight(15);
-                    trackSlot.setOpacity(0);
-                    trackSlot.setHasListener(true);
-                    trackSlot.setOriginalX(0);
-                    trackSlot.setOriginalY(originalY);
-                    trackSlot.setAction(1, "Play");
-                    trackSlot.setOnOpListener((JavaScriptCallback) e -> playCustomSong(name));
-                    trackSlot.revalidate();
-
-                    originalY = originalY + 15;
-                }
-            }
-        }
-        trackListWidget.setScrollHeight(originalY + 3);
-        trackListWidget.revalidateScroll();
-    }
-
-    private void playCustomSong(String name) {
-
-        Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
-
-        if (musicPlayingWidget != null) {
-            musicPlayingWidget.setName(name);
-            musicPlayingWidget.setText(name);
-            try {
-                fadeTo(name);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     @Subscribe
@@ -366,25 +258,6 @@ public class MusicMaskPlugin extends Plugin
     private void fadeTo(String songName) throws InterruptedException {
 
         Thread fadeThread = new Thread(() -> {
-
-            File[] midiFiles = new File(maskPath + "/MIDI/").listFiles();
-            if (midiFiles != null) {
-                for (File midi : midiFiles) {
-                    if (midi.getName().contains(" - ")) {
-                        int index = midi.getName().lastIndexOf(" - ");
-                        String name = midi.getName().substring(index).replace(".mid", "").replace(" - ", "").trim();
-
-                        if (name.equalsIgnoreCase(songName)) {
-                            midiFile = midi;
-                        }
-                    }
-
-                    if (midi.getName().replace(".mid", "").trim().equalsIgnoreCase(songName)) {
-                        midiFile = midi;
-                    }
-                }
-            }
-
             for (SoundPlayer soundPlayer : soundPlayers) {
                 int volume = ((MidiPcmStream) soundPlayer.stream).getPcmStreamVolume();
                 for (int step = volume; step > -1; step--) {

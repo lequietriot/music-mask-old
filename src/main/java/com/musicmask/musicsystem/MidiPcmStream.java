@@ -1,18 +1,12 @@
 package com.musicmask.musicsystem;
 
-import com.musicmask.MusicMaskConfig;
+import com.musicmask.resourcehandler.ResourceLoader;
 import com.sun.media.sound.SF2Soundbank;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiSystem;
-import javax.sound.midi.Soundbank;
-import javax.sound.sampled.UnsupportedAudioFileException;
-import java.io.File;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.List;
 
 public class MidiPcmStream extends PcmStream {
 
@@ -839,7 +833,7 @@ public class MidiPcmStream extends PcmStream {
 
     }
 
-    public void loadStereoSoundBank(File soundBankPath, File musicPatchPath, boolean isLeftChannel, boolean isRS3) throws IOException, UnsupportedAudioFileException, InvalidMidiDataException {
+    public void loadStereoSoundBank(String version, boolean isLeftChannel, boolean isRS3) throws IOException, InvalidMidiDataException {
 
         MidiTrack.loadMidiTrackInfo();
 
@@ -847,30 +841,30 @@ public class MidiPcmStream extends PcmStream {
             int patchID = (int) tableIndex.key;
             MusicPatch musicPatch = (MusicPatch)this.musicPatches.get(patchID);
             if (musicPatch == null) {
-                if (musicPatchPath != null) {
-                    if (new File(musicPatchPath.getPath() + "/" + patchID + ".dat/").exists()) {
-                        musicPatch = new MusicPatch(Files.readAllBytes(Paths.get(String.valueOf(new File(musicPatchPath.getPath() + "/" + patchID + ".dat/")))));
-                        this.musicPatches.put(musicPatch, patchID);
-                    }
-                }
+                musicPatch = new MusicPatch(loadMusicPatchFromURL(patchID));
+                this.musicPatches.put(musicPatch, patchID);
             }
 
             if (musicPatch != null) {
-                SF2Soundbank sf2Soundbank;
-                if (!isRS3) {
-                    if (new File(soundBankPath + ".sf2/").exists()) {
-                        sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(new File(soundBankPath + ".sf2/"));
-                        musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
-                    }
-                }
-
-                else {
-                    if (new File(soundBankPath + "/" + patchID + ".sf2/").exists()) {
-                        sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(new File(soundBankPath + "/" + patchID + ".sf2/"));
-                        musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
-                    }
-                }
+                loadSoundFontsFromURL(version, musicPatch, patchID, isLeftChannel, isRS3);
             }
+        }
+    }
+
+    private byte[] loadMusicPatchFromURL(int patchID) throws IOException {
+        return ResourceLoader.getURLResource("/Patches/" + patchID + ".dat/");
+    }
+
+    private void loadSoundFontsFromURL(String version, MusicPatch musicPatch, int patchID, boolean isLeftChannel, boolean isRS3) throws IOException, InvalidMidiDataException {
+        if (isRS3) {
+            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(ResourceLoader.getURLResource("/SF2/RS3/" + patchID + ".sf2/"));
+            SF2Soundbank sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(byteArrayInputStream);
+            musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
+        }
+        else {
+            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(ResourceLoader.getURLResource("/SF2/" + version + ".sf2/"));
+            SF2Soundbank sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(byteArrayInputStream);
+            musicPatch.loadSoundBankSoundFont(patchID, sf2Soundbank, isLeftChannel);
         }
     }
 }
