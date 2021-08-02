@@ -42,6 +42,7 @@ public class ResourceLoader {
                 Files.copy(input, Paths.get(downloadedFile.toURI()), StandardCopyOption.REPLACE_EXISTING);
                 byteArrayOutputStream.write(Files.readAllBytes(Paths.get(downloadedFile.toURI())));
                 byteArrayOutputStream.close();
+                input.close();
                 return byteArrayOutputStream.toByteArray();
             } else {
                 if (!downloadedFile.isDirectory()) {
