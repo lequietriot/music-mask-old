@@ -25,11 +25,11 @@
 package com.musicmask;
 
 import com.google.inject.Provides;
-import com.musicmask.resourcehandler.ResourceLoader;
 import com.musicmask.musicsystem.MidiPcmStream;
 import com.musicmask.musicsystem.MidiTrack;
 import com.musicmask.musicsystem.PcmPlayer;
 import com.musicmask.musicsystem.SoundPlayer;
+import com.musicmask.resourcehandler.ResourceLoader;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
@@ -48,7 +48,8 @@ import okhttp3.HttpUrl;
 import javax.inject.Inject;
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.sampled.*;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 
 @PluginDescriptor(
         name = "Music Mask",
@@ -162,7 +163,9 @@ public class MusicMaskPlugin extends Plugin
             audioBytes[index + 3] = audioR[index + 3];
         }
 
-        sourceDataLine.write(audioBytes, 0, audioBytes.length);
+        if (sourceDataLine != null) {
+            sourceDataLine.write(audioBytes, 0, audioBytes.length);
+        }
     }
 
     private SoundPlayer[] initStereoMidiStream(byte[] midiFile) throws IOException, InvalidMidiDataException, UnsupportedAudioFileException {
@@ -177,7 +180,7 @@ public class MusicMaskPlugin extends Plugin
         midiPcmStreamL.init(9, 128);
         midiPcmStreamL.setMusicTrack(musicMaskConfig.getLoopingMode());
         midiPcmStreamL.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
-        midiPcmStreamL.loadStereoSoundBank(musicMaskConfig.getMusicVersion().version, true, musicMaskConfig.getMusicVersion().version.equals("RS3"));
+        midiPcmStreamL.loadStereoSoundBank(musicMaskConfig.getMusicVersion().version, true, !musicMaskConfig.getMusicVersion().version.equals("Custom"));
 
         SoundPlayer soundPlayerL = new SoundPlayer();
         soundPlayerL.setStream(midiPcmStreamL);
@@ -189,16 +192,15 @@ public class MusicMaskPlugin extends Plugin
         midiPcmStreamR.init(9, 128);
         midiPcmStreamR.setMusicTrack(musicMaskConfig.getLoopingMode());
         midiPcmStreamR.setPcmStreamVolume(musicMaskConfig.getMusicVolume());
-        midiPcmStreamR.loadStereoSoundBank(musicMaskConfig.getMusicVersion().version, false, musicMaskConfig.getMusicVersion().version.equals("RS3"));
+        midiPcmStreamR.loadStereoSoundBank(musicMaskConfig.getMusicVersion().version, false, !musicMaskConfig.getMusicVersion().version.equals("Custom"));
 
         SoundPlayer soundPlayerR = new SoundPlayer();
         soundPlayerR.setStream(midiPcmStreamR);
         soundPlayerR.samples = new int[512];
         soundPlayerR.init();
 
-        initialized = true;
-
         if (midiPcmStreamL.midiFile.isReady() && midiPcmStreamR.midiFile.isReady()) {
+            initialized = true;
             return new SoundPlayer[]{soundPlayerL, soundPlayerR};
         }
         else {
@@ -220,6 +222,7 @@ public class MusicMaskPlugin extends Plugin
 
         if (sourceDataLine != null) {
             sourceDataLine.stop();
+            sourceDataLine.close();
             sourceDataLine = null;
         }
     }
@@ -228,7 +231,7 @@ public class MusicMaskPlugin extends Plugin
     public void onConfigChanged(ConfigChanged configChanged) {
         if (configChanged.getKey().equals("musicVersion")) {
             try {
-                fadeOutSong();
+                fadeOutSong(currentSong);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -257,7 +260,7 @@ public class MusicMaskPlugin extends Plugin
             if (!musicPlayingWidget.getText().equals(currentSong)) {
                 currentSong = musicPlayingWidget.getText();
                 try {
-                    fadeOutSong();
+                    fadeOutSong(musicPlayingWidget.getText());
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -265,30 +268,34 @@ public class MusicMaskPlugin extends Plugin
         }
     }
 
-    private void fadeOutSong() throws InterruptedException {
+    private void fadeOutSong(String songName) throws InterruptedException {
         Thread fadeThread = new Thread(() -> {
             int volume = ((MidiPcmStream) soundPlayers[0].stream).getPcmStreamVolume();
             for (int step = volume; step > -1; step--) {
                 ((MidiPcmStream) soundPlayers[0].stream).setPcmStreamVolume(step);
                 ((MidiPcmStream) soundPlayers[1].stream).setPcmStreamVolume(step);
+                if (step == 0) {
+                    break;
+                }
                 try {
-                    Thread.sleep(25);
+                    Thread.sleep(20);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
 
-            initialized = false;
+            if (!songName.equals(currentSong)) {
+                currentSong = songName;
+            }
 
             if (sourceDataLine != null) {
                 sourceDataLine.stop();
+                sourceDataLine.close();
                 sourceDataLine = null;
-                startSoundPlayer();
             }
 
-            else {
-                startSoundPlayer();
-            }
+            initialized = false;
+            startSoundPlayer();
         });
 
         fadeThread.start();

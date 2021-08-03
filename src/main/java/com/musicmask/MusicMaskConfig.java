@@ -63,10 +63,10 @@ public interface MusicMaskConfig extends Config
             name = "Music Volume",
             description = "Set the Music Volume"
     )
-    @Range(max = 200)
+    @Range(max = 255)
     default int getMusicVolume()
     {
-        return 200;
+        return 255;
     }
 
     @ConfigItem(

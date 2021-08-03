@@ -833,7 +833,7 @@ public class MidiPcmStream extends PcmStream {
 
     }
 
-    public void loadStereoSoundBank(String version, boolean isLeftChannel, boolean isRS3) throws IOException, InvalidMidiDataException {
+    public void loadStereoSoundBank(String version, boolean isLeftChannel, boolean isCustom) throws IOException, InvalidMidiDataException {
 
         MidiTrack.loadMidiTrackInfo();
 
@@ -846,7 +846,7 @@ public class MidiPcmStream extends PcmStream {
             }
 
             if (musicPatch != null) {
-                loadSoundFontsFromURL(version, musicPatch, patchID, isLeftChannel, isRS3);
+                loadSoundFontsFromURL(version, musicPatch, patchID, isLeftChannel, isCustom);
             }
         }
     }
@@ -855,9 +855,9 @@ public class MidiPcmStream extends PcmStream {
         return ResourceLoader.getURLResource("/Patches/" + patchID + ".dat/");
     }
 
-    private void loadSoundFontsFromURL(String version, MusicPatch musicPatch, int patchID, boolean isLeftChannel, boolean isRS3) throws IOException, InvalidMidiDataException {
-        if (isRS3) {
-            byte[] data = ResourceLoader.getURLResource("/SF2/RS3/" + patchID + ".sf2/");
+    private void loadSoundFontsFromURL(String version, MusicPatch musicPatch, int patchID, boolean isLeftChannel, boolean isCustom) throws IOException, InvalidMidiDataException {
+        if (isCustom) {
+            byte[] data = ResourceLoader.getURLResource("/SF2/" + version + "/" + patchID + ".sf2/");
             if (data != null) {
                 ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(data);
                 SF2Soundbank sf2Soundbank = (SF2Soundbank) MidiSystem.getSoundbank(byteArrayInputStream);
