@@ -1,5 +1,7 @@
 package com.musicmask.resourcehandler;
 
+import com.musicmask.MusicMaskPlugin;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -14,37 +16,37 @@ import java.util.Map;
 
 public class ResourceLoader {
 
-    public static final String fileLink = "https://github.com/lequietriot/music-mask-hosting/raw/master/resources";
-
     public static byte[] getURLResource(String path) {
         try {
-            File downloadedFile = new File(System.getProperty("user.home") + "/MusicMaskData/" + path.replace("%20", " ").trim());
+            File downloadedFile = new File(MusicMaskPlugin.RESOURCES_DIR + File.separator + path.replace("%20", " ").trim());
+            if (!downloadedFile.exists()) {
+                if (downloadedFile.mkdirs()) {
 
-            if (downloadedFile.mkdirs()) {
+                    URL url = new URL(MusicMaskPlugin.RAW_GITHUB + path);
+                    URLConnection http = url.openConnection();
 
-                URL url = new URL(fileLink + path);
-                URLConnection http = url.openConnection();
+                    Map<String, List<String>> header = http.getHeaderFields();
 
-                Map<String, List<String>> header = http.getHeaderFields();
+                    if (header.get(null).contains("404") || header.get(null).contains("410")) {
+                        return null;
+                    }
 
-                if (header.get(null).contains("404") || header.get(null).contains("410")) {
-                    return null;
+                    while (isRedirected(header)) {
+                        url = new URL(MusicMaskPlugin.RAW_GITHUB + path);
+                        http = url.openConnection();
+                        header = http.getHeaderFields();
+                    }
+
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    InputStream input = http.getInputStream();
+                    Files.copy(input, Paths.get(downloadedFile.toURI()), StandardCopyOption.REPLACE_EXISTING);
+                    byteArrayOutputStream.write(Files.readAllBytes(Paths.get(downloadedFile.toURI())));
+                    byteArrayOutputStream.close();
+                    input.close();
+                    return byteArrayOutputStream.toByteArray();
                 }
-
-                while (isRedirected(header)) {
-                    url = new URL(fileLink + path);
-                    http = url.openConnection();
-                    header = http.getHeaderFields();
-                }
-
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                InputStream input = http.getInputStream();
-                Files.copy(input, Paths.get(downloadedFile.toURI()), StandardCopyOption.REPLACE_EXISTING);
-                byteArrayOutputStream.write(Files.readAllBytes(Paths.get(downloadedFile.toURI())));
-                byteArrayOutputStream.close();
-                input.close();
-                return byteArrayOutputStream.toByteArray();
-            } else {
+            }
+            else {
                 if (!downloadedFile.isDirectory()) {
                     return Files.readAllBytes(Paths.get(downloadedFile.toURI()));
                 }

@@ -30,19 +30,20 @@ import com.musicmask.musicsystem.MidiPcmStream;
 import com.musicmask.musicsystem.MidiTrack;
 import com.musicmask.musicsystem.PcmPlayer;
 import com.musicmask.musicsystem.SoundPlayer;
-import com.sun.media.sound.AudioSynthesizer;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
+import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import okhttp3.HttpUrl;
 
 import javax.inject.Inject;
 import javax.sound.midi.InvalidMidiDataException;
@@ -67,8 +68,6 @@ public class MusicMaskPlugin extends Plugin
 
     private String currentSong;
 
-    private AudioSynthesizer audioSynthesizer;
-
     private boolean usingNewEngine;
 
     private byte[] midiFile;
@@ -79,12 +78,17 @@ public class MusicMaskPlugin extends Plugin
 
     SourceDataLine sourceDataLine;
 
-    private String fileLink;
+    public static final File RESOURCES_DIR = new File(RuneLite.RUNELITE_DIR.getPath() + File.separator + "music-mask-resources");
+
+    public static final HttpUrl RAW_GITHUB = HttpUrl.parse("https://github.com/lequietriot/music-mask-hosting/raw/master/resources");
 
     @Override
     protected void startUp() {
 
-        fileLink = "https://github.com/lequietriot/music-mask-hosting/raw/master/resources";
+        if (!RESOURCES_DIR.exists()) {
+            RESOURCES_DIR.mkdirs();
+        }
+
         Widget musicPlayingWidget = client.getWidget(WidgetID.MUSIC_GROUP_ID, 6);
 
         if (musicPlayingWidget != null) {
@@ -107,9 +111,10 @@ public class MusicMaskPlugin extends Plugin
         Thread songThread = new Thread(() -> {
 
             try {
+
                 midiFile = loadMidiFileFromURL(currentSong.replace(" ", "%20").trim());
 
-                if (!initialized) {
+                if (!initialized && midiFile != null) {
 
                     soundPlayers = initStereoMidiStream(midiFile);
 
@@ -193,13 +198,18 @@ public class MusicMaskPlugin extends Plugin
 
         initialized = true;
 
-        return new SoundPlayer[]{soundPlayerL, soundPlayerR};
+        if (midiPcmStreamL.midiFile.isReady() && midiPcmStreamR.midiFile.isReady()) {
+            return new SoundPlayer[]{soundPlayerL, soundPlayerR};
+        }
+        else {
+            return initStereoMidiStream(midiFile);
+        }
     }
 
     @Subscribe
     protected void onGameStateChanged(GameStateChanged gameStateChanged) {
-        if (client.getGameState().equals(GameState.LOGGED_IN)) {
-            currentSong = null;
+        if (client.getGameState().equals(GameState.LOGIN_SCREEN)) {
+            currentSong = "Scape Main";
         }
     }
 
@@ -218,7 +228,7 @@ public class MusicMaskPlugin extends Plugin
     public void onConfigChanged(ConfigChanged configChanged) {
         if (configChanged.getKey().equals("musicVersion")) {
             try {
-                fadeTo(currentSong);
+                fadeOutSong();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -247,7 +257,7 @@ public class MusicMaskPlugin extends Plugin
             if (!musicPlayingWidget.getText().equals(currentSong)) {
                 currentSong = musicPlayingWidget.getText();
                 try {
-                    fadeTo(currentSong);
+                    fadeOutSong();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -255,22 +265,30 @@ public class MusicMaskPlugin extends Plugin
         }
     }
 
-    private void fadeTo(String songName) throws InterruptedException {
-
+    private void fadeOutSong() throws InterruptedException {
         Thread fadeThread = new Thread(() -> {
-            for (SoundPlayer soundPlayer : soundPlayers) {
-                int volume = ((MidiPcmStream) soundPlayer.stream).getPcmStreamVolume();
-                for (int step = volume; step > -1; step--) {
-                    ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(step);
-                    try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+            int volume = ((MidiPcmStream) soundPlayers[0].stream).getPcmStreamVolume();
+            for (int step = volume; step > -1; step--) {
+                ((MidiPcmStream) soundPlayers[0].stream).setPcmStreamVolume(step);
+                ((MidiPcmStream) soundPlayers[1].stream).setPcmStreamVolume(step);
+                try {
+                    Thread.sleep(25);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
-            shutDown();
-            startUp();
+
+            initialized = false;
+
+            if (sourceDataLine != null) {
+                sourceDataLine.stop();
+                sourceDataLine = null;
+                startSoundPlayer();
+            }
+
+            else {
+                startSoundPlayer();
+            }
         });
 
         fadeThread.start();

@@ -88,7 +88,7 @@ public class MidiFileReader {
      * Is the MIDI sequence ready for playback?
      * @return returns true or false if data is present in the buffer.
      */
-    boolean isReady() {
+    public boolean isReady() {
         return this.buffer.array != null;
     }
 

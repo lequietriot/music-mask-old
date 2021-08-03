@@ -27,6 +27,7 @@ package com.musicmask;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.Range;
 
 @ConfigGroup("musicMask")
 public interface MusicMaskConfig extends Config
@@ -34,8 +35,8 @@ public interface MusicMaskConfig extends Config
     enum MusicVersion
     {
         RUNESCAPE_2("RS2"),
-        RUNESCAPE_OLD_SCHOOL("OSRS"),
-        RUNESCAPE_HIGH_DEFINITION("RSHD"),
+        OLD_SCHOOL("OSRS"),
+        HIGH_DEFINITION("RSHD"),
         RUNESCAPE_3("RS3");
         //CUSTOM("Custom");
 
@@ -49,11 +50,11 @@ public interface MusicMaskConfig extends Config
     @ConfigItem(
             position = 1,
             keyName = "musicVersion",
-            name = "",
-            description = ""
+            name = "Music Version",
+            description = "Set the Music Version"
     )
     default MusicVersion getMusicVersion() {
-        return MusicVersion.RUNESCAPE_OLD_SCHOOL;
+        return MusicVersion.OLD_SCHOOL;
     }
 
     @ConfigItem(
@@ -62,9 +63,10 @@ public interface MusicMaskConfig extends Config
             name = "Music Volume",
             description = "Set the Music Volume"
     )
+    @Range(max = 200)
     default int getMusicVolume()
     {
-        return 256;
+        return 200;
     }
 
     @ConfigItem(
@@ -75,7 +77,7 @@ public interface MusicMaskConfig extends Config
     )
     default boolean getLoopingMode()
     {
-        return false;
+        return true;
     }
 
 }

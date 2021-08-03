@@ -845,7 +845,9 @@ public class MidiPcmStream extends PcmStream {
                 this.musicPatches.put(musicPatch, patchID);
             }
 
-            loadSoundFontsFromURL(version, musicPatch, patchID, isLeftChannel, isRS3);
+            if (musicPatch != null) {
+                loadSoundFontsFromURL(version, musicPatch, patchID, isLeftChannel, isRS3);
+            }
         }
     }
 
