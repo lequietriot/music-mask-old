@@ -43,6 +43,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.components.IconTextField;
 import okhttp3.HttpUrl;
 
 import javax.inject.Inject;
@@ -79,6 +80,8 @@ public class MusicMaskPlugin extends Plugin
 
     SourceDataLine sourceDataLine;
 
+    IconTextField searchBar;
+
     public static final File RESOURCES_DIR = new File(RuneLite.RUNELITE_DIR.getPath() + File.separator + "music-mask-resources");
 
     public static final HttpUrl RAW_GITHUB = HttpUrl.parse("https://github.com/lequietriot/music-mask-hosting/raw/master/resources");
@@ -98,7 +101,12 @@ public class MusicMaskPlugin extends Plugin
                 currentSong = musicPlayingWidget.getText();
             }
         } else {
-            currentSong = "Scape Main";
+            if (musicMaskConfig.getOverridingMusic() != null) {
+                currentSong = musicMaskConfig.getOverridingMusic();
+            }
+            else {
+                currentSong = "Scape Main";
+            }
         }
         startSoundPlayer();
     }
@@ -240,6 +248,14 @@ public class MusicMaskPlugin extends Plugin
         if (configChanged.getKey().equals("musicVolume")) {
             for (SoundPlayer soundPlayer : soundPlayers) {
                 ((MidiPcmStream) soundPlayer.stream).setPcmStreamVolume(Integer.parseInt(configChanged.getNewValue()));
+            }
+        }
+
+        if (configChanged.getKey().equals("musicOverride")) {
+            try {
+                fadeOutSong(musicMaskConfig.getOverridingMusic());
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
     }

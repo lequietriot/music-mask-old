@@ -80,4 +80,15 @@ public interface MusicMaskConfig extends Config
         return true;
     }
 
+    @ConfigItem(
+            position = 4,
+            keyName = "musicOverride",
+            name = "Override Login Music",
+            description = "Override the Login Theme"
+    )
+    @Range(max = 50)
+    default String getOverridingMusic()
+    {
+        return "Scape Main";
+    }
 }
