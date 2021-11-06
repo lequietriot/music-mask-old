@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @PluginDescriptor(
+        enabledByDefault = false,
         name = "Music Mask",
         description = "Changes how the game music sounds",
         tags = {"sound", "music", "custom"}

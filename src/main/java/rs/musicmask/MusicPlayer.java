@@ -72,9 +72,12 @@ public class MusicPlayer
             MusicMaskPlugin.audioSynthesizer.unloadAllInstruments(MusicMaskPlugin.audioSynthesizer.getDefaultSoundbank());
             MusicMaskPlugin.audioSynthesizer.loadAllInstruments(soundbank);
 
-            sequencer.getTransmitter().setReceiver(MusicMaskPlugin.audioSynthesizer.getReceiver());
+            byte[] XGModeOn = new byte[]{(byte) 0xF0, (byte) 0x43, (byte) 0x10, (byte) 0x4C, (byte) 0x00, (byte) 0x00, (byte) 0x7E, (byte) 0x00, (byte) 0xF7};
 
-        } catch (MidiUnavailableException | LineUnavailableException e) {
+            sequencer.getTransmitter().setReceiver(MusicMaskPlugin.audioSynthesizer.getReceiver());
+            sequencer.getReceiver().send(new SysexMessage(SysexMessage.SPECIAL_SYSTEM_EXCLUSIVE, XGModeOn, XGModeOn.length), -1);
+
+        } catch (MidiUnavailableException | LineUnavailableException | InvalidMidiDataException e) {
             e.printStackTrace();
         }
     }
